@@ -148,6 +148,21 @@
           abl:    'предложный падеж (о ком? о чём?)',
         },
       },
+      $rdate: { $date: {
+        in_hours:     { $plural: { 1: 'через час', 2: 'через два часа', 3: 'через три часа' } },
+        in_minutes:   { $plural: { 1: 'через минуту', 2: 'через две минуты', 3: 'через три минуты', one: 'через {} минуту', few: 'через {} минут', other: 'через {} минут' } },
+        in_seconds:   { $plural: { one: 'через {} секунду', few: 'через {} секунды', other: 'через {} секунд' } },
+        in_moment:    'через несколько секунд',
+        moment_ago:   'только что',
+        seconds_ago:  { $plural: { one: '{} секунду назад', few: '{} секунды назад', other: '{} секунд назад' } },
+        minutes_ago:  { $plural: { 1: 'минуту назад', 2: 'две минуты назад', 3: 'три минуты назад', one: '{} минуту назад', few: '{} минуты назад', other: '{} минут назад' } },
+        hours_ago:    { $plural: { 1: 'час назад', 2: 'два часа назад', 3: 'три часа назад' } },
+        tomorrow:     'завтра в {$time}',
+        today:        'сегодня в {$time}',
+        yesterday:    'вчера в {$time}',
+        year:         '{$date} в {$time}',
+        other:        '{$date}',
+      } },
       $name: function(name, cs) {
         return inflect(infRules.name, name, cs);
       },
@@ -157,6 +172,12 @@
       $patronym: function(name, cs) {
         return inflect(infRules.patronym, name, cs);
       },
+      $date: function(date, fmt) {
+        //
+      },
+      $time: function(date, fmt) {
+        //
+      },
     },
     en: {
       $T: {
@@ -164,7 +185,28 @@
         cancel:       'cancel',
         popup_key:    'translating key <b>{}</b>',
         popup_all:    'list of keys',
-      },      
+      },
+      $rdate: { $date: {
+        in_hours:     { $plural: { 1: 'in an hour', 2: 'in two hours', 3: 'in three hours' } },
+        in_minutes:   { $plural: { 1: 'in a minute', 2: 'in two minutes', 3: 'in three minutes', one: 'in {} minute', other: 'in {} minutes' } },
+        in_seconds:   { $plural: { one: 'in {} second', other: 'in {} seconds' } },
+        in_moment:    'in a moment',
+        moment_ago:   'just now',
+        seconds_ago:  { $plural: { one: '{} second ago', other: '{} seconds ago' } },
+        minutes_ago:  { $plural: { 1: 'a minute ago', 2: 'two minutes ago', 3: 'three minutes ago', one: '{} minute ago', other: '{} minute ago' } },
+        hours_ago:    { $plural: { 1: 'an hour ago', 2: 'two hours ago', 3: 'three hours ago' } },
+        tomorrow:     'today at {$time}',
+        today:        'yesterday at {$time}',
+        yesterday:    'tomorrow at {$time}',
+        year:         '{$date} at {$time}',
+        other:        '{$date}',
+      } },
+      $date: function(date, fmt) {
+        //
+      },
+      $time: function(date, fmt) {
+        //
+      },
     }
   };
   for (var p in plurals) {
@@ -265,6 +307,11 @@
       if (val.$gender) {
         var g = (sub[0] !== undefined ? sub[0] : sub['g']);
         val = (g == 1 || (g+'')[0] == 'f') ? val.$gender.f : val.$gender.m;
+      }
+
+      if (val.$date) {
+        var dt = (sub[0] !== undefined ? sub[0] : sub['d'] || sub['t']);
+        
       }
 
       val = val.replace(PATTERN, function(match, name) {
