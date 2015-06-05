@@ -30,18 +30,18 @@
     return {v: v, f: f};
   }
   var plurals = {
-    'ru,uk,be': function(n, opt_precision) { 
+    'ru,uk,be': function(n, opt_precision) {
       var i = n | 0;
       var vf = getVF(n, opt_precision);
       if (vf.v == 0 && i % 10 == 1 && i % 100 != 11) { return PLURAL_CATEGORY.ONE;  }
       if (vf.v == 0 && i % 10 >= 2 && i % 10 <= 4 && (i % 100 < 12 || i % 100 > 14)) { return PLURAL_CATEGORY.FEW;  }
-      if (vf.v == 0 && i % 10 == 0 || vf.v == 0 && i % 10 >= 5 && i % 10 <= 9 || vf.v == 0 && i % 100 >= 11 && i % 100 <= 14) { return PLURAL_CATEGORY.MANY;  } 
+      if (vf.v == 0 && i % 10 == 0 || vf.v == 0 && i % 10 >= 5 && i % 10 <= 9 || vf.v == 0 && i % 100 >= 11 && i % 100 <= 14) { return PLURAL_CATEGORY.MANY;  }
       return PLURAL_CATEGORY.OTHER;
     },
     'en': function(n, opt_precision) {
       var i = n | 0;
       var vf = getVF(n, opt_precision);
-      if (i == 1 && vf.v == 0) { 
+      if (i == 1 && vf.v == 0) {
         return PLURAL_CATEGORY.ONE;
       }
       return PLURAL_CATEGORY.OTHER;
@@ -173,10 +173,10 @@
         return inflect(infRules.patronym, name, cs);
       },
       $date: function(date, fmt) {
-        //
+        return Date.prototype.toDateString.apply(date.toDateString ? date : new Date(date * 1000));
       },
       $time: function(date, fmt) {
-        //
+        return Date.prototype.toTimeString.apply(date.toDateString ? date : new Date(date * 1000));
       },
     },
     en: {
@@ -202,10 +202,10 @@
         other:        '{$date}',
       } },
       $date: function(date, fmt) {
-        //
+        return Date.prototype.toDateString.apply(date.toDateString ? date : new Date(date * 1000));
       },
       $time: function(date, fmt) {
-        //
+        return Date.prototype.toTimeString.apply(date.toDateString ? date : new Date(date * 1000));
       },
     }
   };
@@ -238,6 +238,11 @@
   }
 
   /* Translate */
+  var TIME_INTERVALS =
+    [-3600001, -3600000, 'in_hours', -60001, -60000, 'in_minutes', -4001, -1000, 'in_seconds', 0, 1, 'in_moment',
+      4000, 1, 'moment_ago', 60000, 1000, 'seconds_ago', 3600000, 60000, 'minutes_ago', Infinity, 3600000, 'hours_ago'];
+  var DATE_INTERVALS =
+    [86400000, 'tomorrow', 0, 'today', -86400000, 'yesterday'];
   var T = function(key, sub, noinline) {
     if (key[key.length - 1] == '!') {
       noinline = true;
@@ -249,7 +254,7 @@
     key = key.split('.'); // allow to specify key paths (recommended to put grammar case as last part: 'images.nom')
     var val = langs[lang];
     var plural = defaults.plural;
-    
+
     if (!val) {
       if (defaults[lang] && defaults[lang][key[0]]) {
         val = defaults[lang];
@@ -258,7 +263,7 @@
       }
     }
 
-    if (val.plural) {
+    if (val.$plural) {
       plural = val.$plural;
     } else
     if (defaults[lang] && defaults[lang].plural) {
@@ -279,6 +284,10 @@
         }
       }
       root = false;
+    }
+
+    if (typeof val == 'function') {
+      return wrap(val.apply(null, sub), path, inline && !noinline);
     }
 
     if (val === false || val === undefined) {
@@ -311,7 +320,39 @@
 
       if (val.$date) {
         var dt = (sub[0] !== undefined ? sub[0] : sub['d'] || sub['t']);
-        
+        var now = new Date();
+        var diff = now - (dt.getTime && dt.getTime() || dt * 1000);
+        if (!dt.getTime) {
+          dt = new Date(dt * 1000);
+        }
+        var s = false;
+        var fmt = 'other';
+        if (Math.abs(diff) < 3.5 * 60 * 60 * 1000) { // Under 3h 30m in the past or in the future: show relative
+          for (var i = 0; i < TIME_INTERVALS.length; i += 3) {
+            if (diff < TIME_INTERVALS[i]) {
+              s = Math.floor(diff / TIME_INTERVALS[i + 1]);
+              fmt = TIME_INTERVALS[i + 2];
+              break;
+            }
+          }
+          if (val.$date[fmt]) {
+            sub = s;
+          }
+        } else {
+          if (dt.getFullYear() == now.getFullYear()) {
+            fmt = 'year';
+          }
+          for (var i = 0; i < DATE_INTERVALS.length; i += 2) {
+            var t = new Date(dt.getTime() + DATE_INTERVALS[i]);
+            if (t.getFullYear() == now.getFullYear() && t.getMonth() == now.getMonth() && t.getDate() == now.getDate()) {
+              fmt = DATE_INTERVALS[i + 1];
+              break;
+            }
+          }
+        }
+        if (val.$date[fmt]) {
+          val = val.$date[fmt];
+        }
       }
 
       val = val.replace(PATTERN, function(match, name) {
@@ -478,7 +519,7 @@
       save: onsave
     };
     popup.el.className = 'tjs-popup';
-    popup.el.innerHTML = 
+    popup.el.innerHTML =
       '<div class="tjs-box"><div class="tjs-box-head">' + title + '</div>' +
         '<div class="tjs-box-body">' + html + '</div>' +
         '<div class="tjs-box-footer">' +
@@ -571,7 +612,7 @@
           obj = obj[path[i].toLowerCase()];
         }
         var newval = document.getElementById(subkeys[i].id).innerText;
-        cur[path[path.length - 1].toLowerCase()] = 
+        cur[path[path.length - 1].toLowerCase()] =
           obj[path[path.length - 1].toLowerCase()] = newval;
       }
 
@@ -581,7 +622,7 @@
       document.getElementById(subkeys[i].id).innerText = subkeys[i].val;
     }
     document.getElementById(subkeys[0].id).focus();
-    
+
     if (e) {
       e.cancelBubble = true;
       e.stopPropagation && e.stopPropagation();
@@ -605,7 +646,7 @@
       for (var k in keys) {
         if (typeof keys[k] == 'function') {
           continue;
-        } 
+        }
         var leaf = false;
         if (typeof keys[k] == 'string') {
           leaf = true;
