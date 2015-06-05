@@ -122,6 +122,14 @@
     return name.join('-');
   };
   /* Default funcs */
+  function parseDateFormat(fmt) {
+    var used = {};
+    for (var i = 0; i < fmt.length; i++) {
+      var k = (fmt[i] == 'o' && i > 0) ? fmt[i - 1] : fmt[i];
+      used[k] = (used[k] || '') + fmt[i];
+    }
+    return used;
+  }
   var defaults = {
     plural: function() {
       return PLURAL_CATEGORY.OTHER;
@@ -150,18 +158,18 @@
       },
       $rdate: { $date: {
         in_hours:     { $plural: { 1: 'через час', 2: 'через два часа', 3: 'через три часа' } },
-        in_minutes:   { $plural: { 1: 'через минуту', 2: 'через две минуты', 3: 'через три минуты', one: 'через {} минуту', few: 'через {} минут', other: 'через {} минут' } },
+        in_minutes:   { $plural: { 1: 'через минуту', 2: 'через две минуты', 3: 'через три минуты', one: 'через {} минуту', few: 'через {} минуты', other: 'через {} минут' } },
         in_seconds:   { $plural: { one: 'через {} секунду', few: 'через {} секунды', other: 'через {} секунд' } },
         in_moment:    'через несколько секунд',
         moment_ago:   'только что',
         seconds_ago:  { $plural: { one: '{} секунду назад', few: '{} секунды назад', other: '{} секунд назад' } },
         minutes_ago:  { $plural: { 1: 'минуту назад', 2: 'две минуты назад', 3: 'три минуты назад', one: '{} минуту назад', few: '{} минуты назад', other: '{} минут назад' } },
         hours_ago:    { $plural: { 1: 'час назад', 2: 'два часа назад', 3: 'три часа назад' } },
-        tomorrow:     'завтра в {$time}',
-        today:        'сегодня в {$time}',
-        yesterday:    'вчера в {$time}',
-        year:         '{$date} в {$time}',
-        other:        '{$date}',
+        tomorrow:     'завтра в {$time.Hmm}',
+        today:        'сегодня в {$time.Hmm}',
+        yesterday:    'вчера в {$time.Hmm}',
+        year:         '{$date.DMMM} в {$time.Hmm}',
+        other:        '{$date.DMMMYYYY}',
       } },
       $name: function(name, cs) {
         return inflect(infRules.name, name, cs);
@@ -173,10 +181,45 @@
         return inflect(infRules.patronym, name, cs);
       },
       $date: function(date, fmt) {
-        return Date.prototype.toDateString.apply(date.toDateString ? date : new Date(date * 1000));
+        date = date.getTime ? date : new Date(date[0] || date);
+        var keys = parseDateFormat(fmt || 'DMMMMYYYY');
+        var parts = ['D', 'MMM', 'MMMM', 'YYYY', 'H', 'mm'];
+        var res = '';
+        var last = false;
+        for (var i = 0; i < parts.length; i++) {
+          if (keys[parts[i][0]] == parts[i]) {
+            if (last) {
+              if (last == 'H' || last == 'HH') {
+                res += ':';
+              } else {
+                res += ' ';
+              }
+            }
+            if (parts[i] == 'D') {
+              res += date.getDate();
+            } else
+            if (parts[i] == 'MMM') {
+              res += 'янв_фев_мар_апр_мая_июн_июл_авг_сен_окт_ноя_дек'.split('_')[date.getMonth()];
+            } else
+            if (parts[i] == 'MMMM') {
+              res += 'января_февраля_марта_апреля_мая_июня_июля_августа_сентября_октября_ноября_декабря'.split('_')[date.getMonth()];
+            } else
+            if (parts[i] == 'YYYY') {
+              res += date.getFullYear();
+            } else
+            if (parts[i] == 'H') {
+              res += date.getHours();
+            } else
+            if (parts[i] == 'mm') {
+              res += (date.getMinutes() < 10 ? '0' : '') + date.getMinutes();
+            }
+            last = parts[i];
+          }
+        }
+        return res;
       },
       $time: function(date, fmt) {
-        return Date.prototype.toTimeString.apply(date.toDateString ? date : new Date(date * 1000));
+        return defaults.ru.$date(date, fmt || 'Hmm');
       },
     },
     en: {
@@ -195,17 +238,17 @@
         seconds_ago:  { $plural: { one: '{} second ago', other: '{} seconds ago' } },
         minutes_ago:  { $plural: { 1: 'a minute ago', 2: 'two minutes ago', 3: 'three minutes ago', one: '{} minute ago', other: '{} minute ago' } },
         hours_ago:    { $plural: { 1: 'an hour ago', 2: 'two hours ago', 3: 'three hours ago' } },
-        tomorrow:     'today at {$time}',
-        today:        'yesterday at {$time}',
-        yesterday:    'tomorrow at {$time}',
-        year:         '{$date} at {$time}',
-        other:        '{$date}',
+        tomorrow:     'today at {$time.Hmm}',
+        today:        'yesterday at {$time.Hmm}',
+        yesterday:    'tomorrow at {$time.Hmm}',
+        year:         '{$date.DMMM} at {$time.Hmm}',
+        other:        '{$date.DMMMYYYY}',
       } },
       $date: function(date, fmt) {
-        return Date.prototype.toDateString.apply(date.toDateString ? date : new Date(date * 1000));
+        return Date.prototype.toDateString.apply(date.toDateString ? date : new Date(date));
       },
       $time: function(date, fmt) {
-        return Date.prototype.toTimeString.apply(date.toDateString ? date : new Date(date * 1000));
+        return defaults.en.$date(date, fmt || 'Hmm');
       },
     }
   };
@@ -242,7 +285,7 @@
     [-3600001, -3600000, 'in_hours', -60001, -60000, 'in_minutes', -4001, -1000, 'in_seconds', 0, 1, 'in_moment',
       4000, 1, 'moment_ago', 60000, 1000, 'seconds_ago', 3600000, 60000, 'minutes_ago', Infinity, 3600000, 'hours_ago'];
   var DATE_INTERVALS =
-    [86400000, 'tomorrow', 0, 'today', -86400000, 'yesterday'];
+    [-86400000, 'tomorrow', 0, 'today', 86400000, 'yesterday'];
   var T = function(key, sub, noinline) {
     if (key[key.length - 1] == '!') {
       noinline = true;
@@ -287,7 +330,7 @@
     }
 
     if (typeof val == 'function') {
-      return wrap(val.apply(null, sub), path, inline && !noinline);
+      return wrap(val.apply(null, [sub]), path, inline && !noinline);
     }
 
     if (val === false || val === undefined) {
@@ -295,8 +338,43 @@
     }
 
     if (sub !== undefined) {
-      if (typeof sub !== 'object') {
+      if (typeof sub !== 'object' || sub.constructor == Date) {
         sub = [sub];
+      }
+
+      if (val.$date) {
+        var dt = (sub[0] !== undefined ? sub[0] : sub['d'] || sub['t']);
+        dt = dt.getTime ? dt : new Date(dt);
+        var now = new Date();
+        var diff = now - dt.getTime();
+        var s = false;
+        var fmt = 'other';
+        if (Math.abs(diff) < 3.5 * 60 * 60 * 1000) { // Under 3h 30m in the past or in the future: show relative
+          for (var i = 0; i < TIME_INTERVALS.length; i += 3) {
+            if (diff < TIME_INTERVALS[i]) {
+              s = Math.floor(diff / TIME_INTERVALS[i + 1]);
+              fmt = TIME_INTERVALS[i + 2];
+              break;
+            }
+          }
+          if (val.$date[fmt]) {
+            sub = [s];
+          }
+        } else { // More than 3h 30m - show absolute time
+          if (dt.getFullYear() == now.getFullYear()) {
+            fmt = 'year';
+          }
+          for (var i = 0; i < DATE_INTERVALS.length; i += 2) {
+            var t = new Date(dt.getTime() + DATE_INTERVALS[i]);
+            if (t.getFullYear() == now.getFullYear() && t.getMonth() == now.getMonth() && t.getDate() == now.getDate()) {
+              fmt = DATE_INTERVALS[i + 1];
+              break;
+            }
+          }
+        }
+        if (val.$date[fmt]) {
+          val = val.$date[fmt];
+        }
       }
 
       if (val.$plural) {
@@ -316,43 +394,6 @@
       if (val.$gender) {
         var g = (sub[0] !== undefined ? sub[0] : sub['g']);
         val = (g == 1 || (g+'')[0] == 'f') ? val.$gender.f : val.$gender.m;
-      }
-
-      if (val.$date) {
-        var dt = (sub[0] !== undefined ? sub[0] : sub['d'] || sub['t']);
-        var now = new Date();
-        var diff = now - (dt.getTime && dt.getTime() || dt * 1000);
-        if (!dt.getTime) {
-          dt = new Date(dt * 1000);
-        }
-        var s = false;
-        var fmt = 'other';
-        if (Math.abs(diff) < 3.5 * 60 * 60 * 1000) { // Under 3h 30m in the past or in the future: show relative
-          for (var i = 0; i < TIME_INTERVALS.length; i += 3) {
-            if (diff < TIME_INTERVALS[i]) {
-              s = Math.floor(diff / TIME_INTERVALS[i + 1]);
-              fmt = TIME_INTERVALS[i + 2];
-              break;
-            }
-          }
-          if (val.$date[fmt]) {
-            sub = s;
-          }
-        } else {
-          if (dt.getFullYear() == now.getFullYear()) {
-            fmt = 'year';
-          }
-          for (var i = 0; i < DATE_INTERVALS.length; i += 2) {
-            var t = new Date(dt.getTime() + DATE_INTERVALS[i]);
-            if (t.getFullYear() == now.getFullYear() && t.getMonth() == now.getMonth() && t.getDate() == now.getDate()) {
-              fmt = DATE_INTERVALS[i + 1];
-              break;
-            }
-          }
-        }
-        if (val.$date[fmt]) {
-          val = val.$date[fmt];
-        }
       }
 
       val = val.replace(PATTERN, function(match, name) {
