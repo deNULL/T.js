@@ -135,6 +135,45 @@
     }
     return ord;
   }
+  T.num = function num(th, dec) {
+    return function(n, fmt, prec) {
+      fmt = fmt || '';
+      var s = (n < 0) ? '−' : fmt.indexOf('+') > -1 ? '+' : '';
+      n = Math.abs(n);
+      var ip = (n|0) + '';
+      var fp = (n - (n|0));
+      var pad = '';
+      for (var i = 0; i < fmt.length; i++) {
+        if (fmt[i] >= '0' && fmt[i] <= '9') pad += fmt[i];
+      }
+      if (pad) {
+        ip = new Array(parseInt(pad, 10) + 1 - ip.length).join('0') + ip;
+      }
+      prec = prec || '10';
+      fp = fp.toFixed(parseInt(prec, 10));
+      if (prec[0] != '0') {
+        for (var i = fp.length - 1; i >= 2; i--) {
+          if (fp[i] != '0') {
+            break;
+          }
+        }
+        fp = fp.substring(2, i + 1);
+      } else {
+        fp = fp.substr(2);
+      }
+      if (fmt.indexOf('t') > -1) {
+        var t = '';
+        for (var i = 0; i < ip.length; i++) {
+          t = ip[ip.length - 1 - i] + t;
+          if (i < ip.length - 1 && i % 3 == 2) {
+            t = th + t;
+          }
+        }
+        ip = t;
+      }
+      return s + ip + (fp.length ? dec + fp : '');
+    };
+  }
   var DATE_GETTERS = { Y: 'FullYear', M: 'Month', D: 'Date', d: 'Day', H: 'Hours', m: 'Minutes', s: 'Seconds' };
   var defaults = {
     plural: function() {
@@ -224,6 +263,7 @@
       $time: function(date, fmt) {
         return defaults.ru.$date(date, fmt || 'Hmm');
       },
+      $num: num(' ', ','), // '&thinsp;'
     },
     en: {
       $T: {
@@ -259,7 +299,7 @@
         var keys = parseDateFormat(fmt || 'MMMMDYYYY'), res = '', last, v, p;
         for (var i = 0; i < keys.length; i++) {
           res += !last ? '' :
-            ((keys[i][0] == 'Y' && last[0] == 'D' && (keys[i - 2] == 'M' || keys[i - 2] == 'MM')) ||
+            ((keys[i][0] == 'Y' && last[0] == 'D' && (keys.M == 'M' || keys.M == 'MM')) ||
               keys[i] == 'M' || keys[i] == 'MM' || last == 'M' || last == 'MM') ? '/' :
             (last == 'H' || last == 'HH' || last == 'm' || last == 'mm') ? ':' : ' ';
           v = date['get' + DATE_GETTERS[keys[i][0]]]();
@@ -279,6 +319,7 @@
       $time: function(date, fmt) {
         return defaults.en.$date(date, fmt || 'Hmm');
       },
+      $num: num(',', '.'), // '&thinsp;'
     }
   };
   for (var p in plurals) {
