@@ -9,9 +9,207 @@
   var cssInserted = false;
   var popups = [];
 
-  /* Utils for plurals */
   var PLURAL_CATEGORY = { ZERO: 'zero', ONE: 'one', TWO: 'two', FEW: 'few', MANY: 'many', OTHER: 'other' };
   var GENDER = { MALE: 'm', FEMALE: 'f' };
+  /* Translate */
+  var TIME_INTERVALS =
+    [-3600001, -3600000, 'in_hours', -60001, -60000, 'in_minutes', -4001, -1000, 'in_seconds', 0, 1, 'in_moment',
+      4000, 1, 'moment_ago', 60000, 1000, 'seconds_ago', 3600000, 60000, 'minutes_ago', Infinity, 3600000, 'hours_ago'];
+  var DATE_INTERVALS =
+    [-86400000, 'tomorrow', 0, 'today', 86400000, 'yesterday'];
+  var T = function(key, sub, noinline) {
+    if (key[key.length - 1] == '!') {
+      noinline = true;
+      key = key.substr(0, key.length - 1);
+    }
+
+    var path = key;
+    var psub = sub;
+    key = key.split('.'); // allow to specify key paths (recommended to put grammar case as last part: 'images.nom')
+    var val = langs[lang];
+    var plural = defaults.plural;
+
+    if (!val) {
+      if (defaults[lang] && defaults[lang][key[0]]) {
+        val = defaults[lang];
+      } else {
+        return wrap(path, path, inline && !noinline);
+      }
+    }
+
+    if (val.$plural) {
+      plural = val.$plural;
+    } else
+    if (defaults[lang] && defaults[lang].plural) {
+      plural = defaults[lang].plural;
+    }
+
+    var root = true;
+    for (var i = 0; i < key.length; i++) {
+      if (typeof val == 'function') {
+        return wrap(val.apply(null, [sub].concat(key.slice(i))), path, inline && !noinline);
+      }
+      val = val[key[i].toLowerCase()];
+      if (!val) {
+        if (root && defaults[lang][key[i].toLowerCase()]) {
+          val = defaults[lang][key[i].toLowerCase()];
+        } else {
+          return wrap(path, path, inline && !noinline);
+        }
+      }
+      root = false;
+    }
+
+    if (typeof val == 'function') {
+      return wrap(val.apply(null, [sub]), path, inline && !noinline);
+    }
+
+    if (val === false || val === undefined) {
+      return wrap(path, path, inline && !noinline);
+    }
+
+    if (sub !== undefined) {
+      if (typeof sub !== 'object' || sub.constructor == Date) {
+        sub = [sub];
+      }
+
+      if (val.$date) {
+        var dt = (sub[0] !== undefined ? sub[0] : sub['d'] || sub['t']);
+        dt = dt.getTime ? dt : new Date(dt);
+        var now = new Date();
+        var diff = now - dt.getTime();
+        var s = false;
+        var fmt = 'other';
+        if (Math.abs(diff) < 3.5 * 60 * 60 * 1000) { // Under 3h 30m in the past or in the future: show relative
+          for (var i = 0; i < TIME_INTERVALS.length; i += 3) {
+            if (diff < TIME_INTERVALS[i]) {
+              s = Math.floor(diff / TIME_INTERVALS[i + 1]);
+              fmt = TIME_INTERVALS[i + 2];
+              if (!val.$date[fmt]) {
+                if (fmt == 'in_moment') {
+                  fmt = val.$date['moment_ago'] ? 'moment_ago' : 'in_seconds';
+                } else
+                if (fmt == 'moment_ago') {
+                  fmt = val.$date['in_moment'] ? 'in_moment' : 'seconds_ago';
+                }
+              }
+              break;
+            }
+          }
+          if (val.$date[fmt]) {
+            sub = [s];
+          }
+        }
+        if (fmt == 'other' || !val.$date[fmt]) { // More than 3h 30m - show absolute time
+          if (dt.getFullYear() == now.getFullYear()) {
+            fmt = 'year';
+          }
+          for (var i = 0; i < DATE_INTERVALS.length; i += 2) {
+            var t = new Date(dt.getTime() + DATE_INTERVALS[i]);
+            if (t.getFullYear() == now.getFullYear() && t.getMonth() == now.getMonth() && t.getDate() == now.getDate()) {
+              fmt = DATE_INTERVALS[i + 1];
+              break;
+            }
+          }
+        }
+        if (val.$date[fmt]) {
+          val = val.$date[fmt];
+        }
+      }
+
+      if (val.$plural) {
+        var n = parseFloat(sub[0] !== undefined ? sub[0] : sub['n']);
+        if (n in val.$plural) {
+          val = val.$plural[n];
+        } else {
+          var cat = plural(n); // TODO: maybe use other plural categories engine
+          if (cat in val.$plural) {
+            val = val.$plural[cat];
+          } else {
+            val = val.$plural[PLURAL_CATEGORY.OTHER];
+          }
+        }
+      }
+
+      if (val.$gender) {
+        var g = (sub[0] !== undefined ? sub[0] : sub['g']);
+        val = (g == 1 || (g+'')[0] == 'f') ? val.$gender.f : val.$gender.m;
+      }
+
+      val = val.replace(PATTERN, function(match, name) {
+        if ((match == '{' + name + '}') && (name[0] != '$')) { // substitute
+          var esc = true;
+          if (name[0] == '{' && name[name.length - 1] == '}') {
+            esc = false;
+            name = name.substr(1, name.length - 2);
+          }
+          name = name.trim();
+
+          var subst;
+          if (name == '') {
+            name = 0;
+            subst = sub[0];
+          } else {
+            subst = walk(name.split('.'), sub);
+          }
+
+          if (subst === false || subst === undefined) {
+            return name;
+          }
+
+          if (parseInt(name) != name) {
+            if (name == name.toUpperCase()) {
+              subst = subst.toLocaleUpperCase();
+            } else
+            if (name.substr(name[0] == '$' ? 1 : 0, 1).toUpperCase() == name.substr(name[0] == '$' ? 1 : 0, 1)) {
+              subst = subst.substr(0, 1).toLocaleUpperCase() + subst.substr(1);
+            }
+          }
+
+          if (esc) {
+            subst = ('' + subst).replace(GT, '&gt;').replace(LT, '&lt;');
+          }
+
+          return subst;
+        } else
+        if ((match == '{>' + name + '}') || ((match == '{' + name + '}') && (name[0] == '$'))) { // partial
+          var parts = name.trim().split(' ');
+          name = parts.shift().trim();
+          var args = {};
+          if (parts.length > 0) { // pass down some substitutions
+            for (var i = 0; i < parts.length; i++) {
+              var kv = parts[i].split('=');
+              if (kv.length > 1) {
+                args[kv[0].trim()] = args[i] = walk(kv[1].trim().split('.'), sub);
+              } else {
+                args[i] = walk(kv[0].trim().split('.'), sub);
+
+                if (parts.length == 1) {
+                  args = args[0];
+                }
+              }
+            }
+          } else {
+            args = psub;
+          }
+
+          return T(name, args, true);
+        }
+        return match;
+      });
+    }
+
+    var last = key.pop(); // perform text transformation based on the last key part
+    if (last == last.toUpperCase()) {
+      val = val.toLocaleUpperCase();
+    } else
+    if (last.substr(last[0] == '$' ? 1 : 0, 1).toUpperCase() == last.substr(last[0] == '$' ? 1 : 0, 1)) {
+      val = val.substr(0, 1).toLocaleUpperCase() + val.substr(1);
+    }
+    return wrap(val, path, inline && !noinline);
+  };
+
+  /* Utils for plurals */
   function getDecimals(n) {
     n = n + '';
     var i = n.indexOf('.');
@@ -28,6 +226,98 @@
     var base = Math.pow(10, v);
     var f = ((n * base) | 0) % base;
     return {v: v, f: f};
+  }
+
+  function inflect(rules, name, cs) {
+    var g = GENDER.MALE;
+    if (name.constructor != ''.constructor) {
+      g = name.g || name[1] || GENDER.MALE;
+      g = (g == 1 || (g+'')[0] == 'f') ? GENDER.FEMALE : GENDER.MALE;
+      name = name.name || name[0];
+    }
+    name = name.split('-');
+    var csind = ({ gen: 0, dat: 1, acc: 2, ins: 3, abl: 4 })[cs];
+    if (csind === undefined) {
+      return name.join('-');
+    }
+    for (var i = 0; i < name.length; i++) {
+      var low = name[i].toLocaleLowerCase();
+      for (var j = 0; j < rules.length; j++) {
+        var rule = rules[j].split(':');
+        var rg = rule[0][rule[0].length - 1];
+        if (rg != 'a' && rg != g) continue;
+        var vars = rule[1].split(',');
+        if (rule[0][0] == '^' && (i || name.length == 1 || vars.indexOf(low) == -1)) continue;
+        if (rule[0][0] == '=' && vars.indexOf(low) == -1) continue;
+        var found = false;
+        for (var k = 0; k < vars.length; k++) {
+          if (low.substr(low.length - vars[k].length) == vars[k]) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) continue;
+        if (rule.length < 3) break;
+        var form = rule[2].split(',')[csind].split('-');
+        name[i] = name[i].substr(0, name[i].length - form.length + 1) + form[form.length - 1];
+        break;
+      }
+    }
+    return name.join('-');
+  };
+  /* Default funcs */
+  function parseDateFormat(fmt) {
+    var used = {};
+    var ord = [];
+    for (var i = 0; i < fmt.length; i++) {
+      var k = (fmt[i] == 'o' && i > 0) ? fmt[i - 1] : fmt[i];
+      if (!used[k]) ord.push(fmt[i]);
+      used[k] = ord[k] = (used[k] || '') + fmt[i];
+    }
+    for (var i = 0; i < ord.length; i++) {
+      ord[i] = used[ord[i]];
+    }
+    return ord;
+  }
+
+  T.num = function(th, dec) {
+    return function(n, fmt, prec) {
+      fmt = fmt || '';
+      var s = (n < 0) ? '−' : fmt.indexOf('+') > -1 ? '+' : '';
+      n = Math.abs(n);
+      var ip = (n|0) + '';
+      var fp = (n - (n|0));
+      var pad = '';
+      for (var i = 0; i < fmt.length; i++) {
+        if (fmt[i] >= '0' && fmt[i] <= '9') pad += fmt[i];
+      }
+      if (pad) {
+        ip = new Array(parseInt(pad, 10) + 1 - ip.length).join('0') + ip;
+      }
+      prec = prec || '10';
+      fp = fp.toFixed(parseInt(prec, 10));
+      if (prec[0] != '0') {
+        for (var i = fp.length - 1; i >= 2; i--) {
+          if (fp[i] != '0') {
+            break;
+          }
+        }
+        fp = fp.substring(2, i + 1);
+      } else {
+        fp = fp.substr(2);
+      }
+      if (fmt.indexOf('t') > -1) {
+        var t = '';
+        for (var i = 0; i < ip.length; i++) {
+          t = ip[ip.length - 1 - i] + t;
+          if (i < ip.length - 1 && i % 3 == 2) {
+            t = th + t;
+          }
+        }
+        ip = t;
+      }
+      return s + ip + (fp.length ? dec + fp : '');
+    };
   }
   var plurals = {
     'ru,uk,be': function(n, opt_precision) {
@@ -84,96 +374,6 @@
       'm:ич:а,у,а,ем,е', 'f:на:-ы,-е,-у,-ой,-е'
     ],
   };
-  function inflect(rules, name, cs) {
-    var g = GENDER.MALE;
-    if (name.constructor != ''.constructor) {
-      g = name.g || name[1] || GENDER.MALE;
-      g = (g == 1 || (g+'')[0] == 'f') ? GENDER.FEMALE : GENDER.MALE;
-      name = name.name || name[0];
-    }
-    name = name.split('-');
-    var csind = ({ gen: 0, dat: 1, acc: 2, ins: 3, abl: 4 })[cs];
-    if (csind === undefined) {
-      return name.join('-');
-    }
-    for (var i = 0; i < name.length; i++) {
-      var low = name[i].toLocaleLowerCase();
-      for (var j = 0; j < rules.length; j++) {
-        var rule = rules[j].split(':');
-        var rg = rule[0][rule[0].length - 1];
-        if (rg != 'a' && rg != g) continue;
-        var vars = rule[1].split(',');
-        if (rule[0][0] == '^' && (i || name.length == 1 || vars.indexOf(low) == -1)) continue;
-        if (rule[0][0] == '=' && vars.indexOf(low) == -1) continue;
-        var found = false;
-        for (var k = 0; k < vars.length; k++) {
-          if (low.substr(low.length - vars[k].length) == vars[k]) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) continue;
-        if (rule.length < 3) break;
-        var form = rule[2].split(',')[csind].split('-');
-        name[i] = name[i].substr(0, name[i].length - form.length + 1) + form[form.length - 1];
-        break;
-      }
-    }
-    return name.join('-');
-  };
-  /* Default funcs */
-  function parseDateFormat(fmt) {
-    var used = {};
-    var ord = [];
-    for (var i = 0; i < fmt.length; i++) {
-      var k = (fmt[i] == 'o' && i > 0) ? fmt[i - 1] : fmt[i];
-      if (!used[k]) ord.push(fmt[i]);
-      used[k] = ord[k] = (used[k] || '') + fmt[i];
-    }
-    for (var i = 0; i < ord.length; i++) {
-      ord[i] = used[ord[i]];
-    }
-    return ord;
-  }
-  T.num = function num(th, dec) {
-    return function(n, fmt, prec) {
-      fmt = fmt || '';
-      var s = (n < 0) ? '−' : fmt.indexOf('+') > -1 ? '+' : '';
-      n = Math.abs(n);
-      var ip = (n|0) + '';
-      var fp = (n - (n|0));
-      var pad = '';
-      for (var i = 0; i < fmt.length; i++) {
-        if (fmt[i] >= '0' && fmt[i] <= '9') pad += fmt[i];
-      }
-      if (pad) {
-        ip = new Array(parseInt(pad, 10) + 1 - ip.length).join('0') + ip;
-      }
-      prec = prec || '10';
-      fp = fp.toFixed(parseInt(prec, 10));
-      if (prec[0] != '0') {
-        for (var i = fp.length - 1; i >= 2; i--) {
-          if (fp[i] != '0') {
-            break;
-          }
-        }
-        fp = fp.substring(2, i + 1);
-      } else {
-        fp = fp.substr(2);
-      }
-      if (fmt.indexOf('t') > -1) {
-        var t = '';
-        for (var i = 0; i < ip.length; i++) {
-          t = ip[ip.length - 1 - i] + t;
-          if (i < ip.length - 1 && i % 3 == 2) {
-            t = th + t;
-          }
-        }
-        ip = t;
-      }
-      return s + ip + (fp.length ? dec + fp : '');
-    };
-  }
   var DATE_GETTERS = { Y: 'FullYear', M: 'Month', D: 'Date', d: 'Day', H: 'Hours', m: 'Minutes', s: 'Seconds' };
   var defaults = {
     plural: function() {
@@ -263,7 +463,7 @@
       $time: function(date, fmt) {
         return defaults.ru.$date(date, fmt || 'Hmm');
       },
-      $num: num(' ', ','), // '&thinsp;'
+      $num: T.num(' ', ','), // '&thinsp;'
     },
     en: {
       $T: {
@@ -319,7 +519,7 @@
       $time: function(date, fmt) {
         return defaults.en.$date(date, fmt || 'Hmm');
       },
-      $num: num(',', '.'), // '&thinsp;'
+      $num: T.num(',', '.'), // '&thinsp;'
     }
   };
   for (var p in plurals) {
@@ -349,195 +549,6 @@
     }
     return '<span class="tjs-inline" onclick="return T.showKey(\'' + k + '\',event);">' + s + '</span>';
   }
-
-  /* Translate */
-  var TIME_INTERVALS =
-    [-3600001, -3600000, 'in_hours', -60001, -60000, 'in_minutes', -4001, -1000, 'in_seconds', 0, 1, 'in_moment',
-      4000, 1, 'moment_ago', 60000, 1000, 'seconds_ago', 3600000, 60000, 'minutes_ago', Infinity, 3600000, 'hours_ago'];
-  var DATE_INTERVALS =
-    [-86400000, 'tomorrow', 0, 'today', 86400000, 'yesterday'];
-  var T = function(key, sub, noinline) {
-    if (key[key.length - 1] == '!') {
-      noinline = true;
-      key = key.substr(0, key.length - 1);
-    }
-
-    var path = key;
-    var psub = sub;
-    key = key.split('.'); // allow to specify key paths (recommended to put grammar case as last part: 'images.nom')
-    var val = langs[lang];
-    var plural = defaults.plural;
-
-    if (!val) {
-      if (defaults[lang] && defaults[lang][key[0]]) {
-        val = defaults[lang];
-      } else {
-        return wrap(path, path, inline && !noinline);
-      }
-    }
-
-    if (val.$plural) {
-      plural = val.$plural;
-    } else
-    if (defaults[lang] && defaults[lang].plural) {
-      plural = defaults[lang].plural;
-    }
-
-    var root = true;
-    for (var i = 0; i < key.length; i++) {
-      if (typeof val == 'function') {
-        return wrap(val.apply(null, [sub].concat(key.slice(i))), path, inline && !noinline);
-      }
-      val = val[key[i].toLowerCase()];
-      if (!val) {
-        if (root && defaults[lang][key[i]]) {
-          val = defaults[lang][key[i]];
-        } else {
-          return wrap(path, path, inline && !noinline);
-        }
-      }
-      root = false;
-    }
-
-    if (typeof val == 'function') {
-      return wrap(val.apply(null, [sub]), path, inline && !noinline);
-    }
-
-    if (val === false || val === undefined) {
-      return wrap(path, path, inline && !noinline);
-    }
-
-    if (sub !== undefined) {
-      if (typeof sub !== 'object' || sub.constructor == Date) {
-        sub = [sub];
-      }
-
-      if (val.$date) {
-        var dt = (sub[0] !== undefined ? sub[0] : sub['d'] || sub['t']);
-        dt = dt.getTime ? dt : new Date(dt);
-        var now = new Date();
-        var diff = now - dt.getTime();
-        var s = false;
-        var fmt = 'other';
-        if (Math.abs(diff) < 3.5 * 60 * 60 * 1000) { // Under 3h 30m in the past or in the future: show relative
-          for (var i = 0; i < TIME_INTERVALS.length; i += 3) {
-            if (diff < TIME_INTERVALS[i]) {
-              s = Math.floor(diff / TIME_INTERVALS[i + 1]);
-              fmt = TIME_INTERVALS[i + 2];
-              break;
-            }
-          }
-          if (val.$date[fmt]) {
-            sub = [s];
-          }
-        } else { // More than 3h 30m - show absolute time
-          if (dt.getFullYear() == now.getFullYear()) {
-            fmt = 'year';
-          }
-          for (var i = 0; i < DATE_INTERVALS.length; i += 2) {
-            var t = new Date(dt.getTime() + DATE_INTERVALS[i]);
-            if (t.getFullYear() == now.getFullYear() && t.getMonth() == now.getMonth() && t.getDate() == now.getDate()) {
-              fmt = DATE_INTERVALS[i + 1];
-              break;
-            }
-          }
-        }
-        if (val.$date[fmt]) {
-          val = val.$date[fmt];
-        }
-      }
-
-      if (val.$plural) {
-        var n = parseFloat(sub[0] !== undefined ? sub[0] : sub['n']);
-        if (n in val.$plural) {
-          val = val.$plural[n];
-        } else {
-          var cat = plural(n); // TODO: maybe use other plural categories engine
-          if (cat in val.$plural) {
-            val = val.$plural[cat];
-          } else {
-            val = val.$plural[PLURAL_CATEGORY.OTHER];
-          }
-        }
-      }
-
-      if (val.$gender) {
-        var g = (sub[0] !== undefined ? sub[0] : sub['g']);
-        val = (g == 1 || (g+'')[0] == 'f') ? val.$gender.f : val.$gender.m;
-      }
-
-      val = val.replace(PATTERN, function(match, name) {
-        if ((match == '{' + name + '}') && (name[0] != '$')) { // substitute
-          var esc = true;
-          if (name[0] == '{' && name[name.length - 1] == '}') {
-            esc = false;
-            name = name.substr(1, name.length - 2);
-          }
-          name = name.trim();
-
-          var subst;
-          if (name == '') {
-            name = 0;
-            subst = sub[0];
-          } else {
-            subst = walk(name.split('.'), sub);
-          }
-
-          if (subst === false || subst === undefined) {
-            return name;
-          }
-
-          if (parseInt(name) != name) {
-            if (name == name.toUpperCase()) {
-              subst = subst.toLocaleUpperCase();
-            } else
-            if (name.substr(0, 1).toUpperCase() == name.substr(0, 1)) {
-              subst = subst.substr(0, 1).toLocaleUpperCase() + subst.substr(1);
-            }
-          }
-
-          if (esc) {
-            subst = ('' + subst).replace(GT, '&gt;').replace(LT, '&lt;');
-          }
-
-          return subst;
-        } else
-        if ((match == '{>' + name + '}') || ((match == '{' + name + '}') && (name[0] == '$'))) { // partial
-          var parts = name.trim().split(' ');
-          name = parts.shift().trim();
-          var args = {};
-          if (parts.length > 0) { // pass down some substitutions
-            for (var i = 0; i < parts.length; i++) {
-              var kv = parts[i].split('=');
-              if (kv.length > 1) {
-                args[kv[0].trim()] = args[i] = walk(kv[1].trim().split('.'), sub);
-              } else {
-                args[i] = walk(kv[0].trim().split('.'), sub);
-
-                if (parts.length == 1) {
-                  args = args[0];
-                }
-              }
-            }
-          } else {
-            args = psub;
-          }
-
-          return T(name, args, true);
-        }
-        return match;
-      });
-    }
-
-    var last = key.pop(); // perform text transformation based on the last key part
-    if (last == last.toUpperCase()) {
-      val = val.toLocaleUpperCase();
-    } else
-    if (last.substr(0, 1).toUpperCase() == last.substr(0, 1)) {
-      val = val.substr(0, 1).toLocaleUpperCase() + val.substr(1);
-    }
-    return wrap(val, path, inline && !noinline);
-  };
 
   T.define = function(lang, keys) {
     var obj, l, k;
