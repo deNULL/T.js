@@ -124,12 +124,18 @@
   /* Default funcs */
   function parseDateFormat(fmt) {
     var used = {};
+    var ord = [];
     for (var i = 0; i < fmt.length; i++) {
       var k = (fmt[i] == 'o' && i > 0) ? fmt[i - 1] : fmt[i];
-      used[k] = (used[k] || '') + fmt[i];
+      if (!used[k]) ord.push(fmt[i]);
+      used[k] = ord[k] = (used[k] || '') + fmt[i];
     }
-    return used;
+    for (var i = 0; i < ord.length; i++) {
+      ord[i] = used[ord[i]];
+    }
+    return ord;
   }
+  var DATE_GETTERS = { Y: 'FullYear', M: 'Month', D: 'Date', d: 'Day', H: 'Hours', m: 'Minutes', s: 'Seconds' };
   var defaults = {
     plural: function() {
       return PLURAL_CATEGORY.OTHER;
@@ -180,41 +186,38 @@
       $patronym: function(name, cs) {
         return inflect(infRules.patronym, name, cs);
       },
+      $dparts: {
+        MMM: {
+          nom: 'янв_фев_мар_апр_май_июн_июл_авг_сен_окт_ноя_дек'.split('_'),
+          gen: 'янв_фев_мар_апр_мая_июн_июл_авг_сен_окт_ноя_дек'.split('_'),
+        },
+        MMMM: {
+          nom: 'январь_февраль_март_апрель_май_июнь_июль_август_сентябрь_октябрь_ноябрь_декабрь'.split('_'),
+          gen: 'января_февраля_марта_апреля_мая_июня_июля_августа_сентября_октября_ноября_декабря'.split('_')
+        },
+        dd: 'вс_пн_вт_ср_чт_пт_сб'.split('_'),
+        ddd: 'вс_пн_вт_ср_чт_пт_сб'.split('_'),
+        dddd: 'воскресенье_понедельник_вторник_среда_четверг_пятница_суббота'.split('_'),
+      },
       $date: function(date, fmt) {
         date = date.getTime ? date : new Date(date[0] || date);
-        var keys = parseDateFormat(fmt || 'DMMMMYYYY');
-        var parts = ['D', 'MMM', 'MMMM', 'YYYY', 'H', 'mm'];
-        var res = '';
-        var last = false;
-        for (var i = 0; i < parts.length; i++) {
-          if (keys[parts[i][0]] == parts[i]) {
-            if (last) {
-              if (last == 'H' || last == 'HH') {
-                res += ':';
-              } else {
-                res += ' ';
-              }
-            }
-            if (parts[i] == 'D') {
-              res += date.getDate();
-            } else
-            if (parts[i] == 'MMM') {
-              res += 'янв_фев_мар_апр_мая_июн_июл_авг_сен_окт_ноя_дек'.split('_')[date.getMonth()];
-            } else
-            if (parts[i] == 'MMMM') {
-              res += 'января_февраля_марта_апреля_мая_июня_июля_августа_сентября_октября_ноября_декабря'.split('_')[date.getMonth()];
-            } else
-            if (parts[i] == 'YYYY') {
-              res += date.getFullYear();
-            } else
-            if (parts[i] == 'H') {
-              res += date.getHours();
-            } else
-            if (parts[i] == 'mm') {
-              res += (date.getMinutes() < 10 ? '0' : '') + date.getMinutes();
-            }
-            last = parts[i];
+        var keys = parseDateFormat(fmt || 'DMMMMYYYY'), res = '', last, v, p;
+        for (var i = 0; i < keys.length; i++) {
+          res += !last ? '' :
+            ((keys[i][0] == 'Y' && last[0] == 'D') || keys[i] == 'M' || keys[i] == 'MM' || last == 'M' || last == 'MM') ? '.' :
+            (last == 'H' || last == 'HH' || last == 'm' || last == 'mm') ? ':' : ' ';
+          v = date['get' + DATE_GETTERS[keys[i][0]]]();
+          if (keys[i] in defaults.ru.$dparts) {
+            p = defaults.ru.$dparts[keys[i]];
+            res += ((keys[i] == 'MMM' || keys[i] == 'MMMM') ? p[keys.D ? 'gen' : 'nom'] : p)[v];
+          } else
+          if (keys[i].length == 1 || keys[i] == 'YYYY') {
+            res += v;
+          } else
+          if (keys[i].length == 2) {
+            res += (v % 100 < 10 ? '0' : '') + (v % 100);
           }
+          last = keys[i];
         }
         return res;
       },
@@ -236,16 +239,42 @@
         in_moment:    'in a moment',
         moment_ago:   'just now',
         seconds_ago:  { $plural: { one: '{} second ago', other: '{} seconds ago' } },
-        minutes_ago:  { $plural: { 1: 'a minute ago', 2: 'two minutes ago', 3: 'three minutes ago', one: '{} minute ago', other: '{} minute ago' } },
+        minutes_ago:  { $plural: { 1: 'a minute ago', 2: 'two minutes ago', 3: 'three minutes ago', one: '{} minute ago', other: '{} minutes ago' } },
         hours_ago:    { $plural: { 1: 'an hour ago', 2: 'two hours ago', 3: 'three hours ago' } },
-        tomorrow:     'today at {$time.Hmm}',
-        today:        'yesterday at {$time.Hmm}',
-        yesterday:    'tomorrow at {$time.Hmm}',
-        year:         '{$date.DMMM} at {$time.Hmm}',
-        other:        '{$date.DMMMYYYY}',
+        tomorrow:     'tomorrow at {$time.Hmm}',
+        today:        'today at {$time.Hmm}',
+        yesterday:    'yesterday at {$time.Hmm}',
+        year:         '{$date.MMMD} at {$time.Hmm}',
+        other:        '{$date.MMMDYYYY}',
       } },
+      $dparts: {
+        MMM: 'Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec'.split('_'),
+        MMMM: 'January_February_March_April_May_June_July_August_September_October_November_December'.split('_'),
+        dd: 'Su_Mo_Tu_We_Th_Fr_Sa'.split('_'),
+        ddd: 'Sun_Mon_Tue_Wed_Thu_Fri_Sat'.split('_'),
+        dddd: 'Sunday_Monday_Tuesday_Wednesday_Thursday_Friday_Saturday'.split('_'),
+      },
       $date: function(date, fmt) {
-        return Date.prototype.toDateString.apply(date.toDateString ? date : new Date(date));
+        date = date.getTime ? date : new Date(date[0] || date);
+        var keys = parseDateFormat(fmt || 'MMMMDYYYY'), res = '', last, v, p;
+        for (var i = 0; i < keys.length; i++) {
+          res += !last ? '' :
+            ((keys[i][0] == 'Y' && last[0] == 'D' && (keys[i - 2] == 'M' || keys[i - 2] == 'MM')) ||
+              keys[i] == 'M' || keys[i] == 'MM' || last == 'M' || last == 'MM') ? '/' :
+            (last == 'H' || last == 'HH' || last == 'm' || last == 'mm') ? ':' : ' ';
+          v = date['get' + DATE_GETTERS[keys[i][0]]]();
+          if (keys[i] in defaults.en.$dparts) {
+            res += defaults.en.$dparts[keys[i]][v];
+          } else
+          if (keys[i].length == 1 || keys[i] == 'YYYY') {
+            res += v;
+          } else
+          if (keys[i].length == 2) {
+            res += (v % 100 < 10 ? '0' : '') + (v % 100);
+          }
+          last = keys[i];
+        }
+        return res;
       },
       $time: function(date, fmt) {
         return defaults.en.$date(date, fmt || 'Hmm');
