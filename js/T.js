@@ -30,7 +30,7 @@
     var plural = defaults.plural;
 
     if (!val) {
-      if (defaults[lang] && defaults[lang][key[0]]) {
+      if (defaults[lang] && defaults[lang][key[0].toLowerCase()]) {
         val = defaults[lang];
       } else {
         return wrap(path, path, inline && !noinline);
@@ -83,7 +83,7 @@
         if (Math.abs(diff) < 3.5 * 60 * 60 * 1000) { // Under 3h 30m in the past or in the future: show relative
           for (var i = 0; i < TIME_INTERVALS.length; i += 3) {
             if (diff < TIME_INTERVALS[i]) {
-              s = Math.floor(diff / TIME_INTERVALS[i + 1]);
+              s = Math.round(diff / TIME_INTERVALS[i + 1]);
               fmt = TIME_INTERVALS[i + 2];
               if (!val.$date[fmt]) {
                 if (fmt == 'in_moment') {
@@ -443,6 +443,7 @@
         var keys = parseDateFormat(fmt || 'DMMMMYYYY'), res = '', last, v, p;
         for (var i = 0; i < keys.length; i++) {
           res += !last ? '' :
+            (keys[i][0] == 'd') ? ', ' :
             ((keys[i][0] == 'Y' && last[0] == 'D') || keys[i] == 'M' || keys[i] == 'MM' || last == 'M' || last == 'MM') ? '.' :
             (last == 'H' || last == 'HH' || last == 'm' || last == 'mm') ? ':' : ' ';
           v = date['get' + DATE_GETTERS[keys[i][0]]]();
@@ -463,7 +464,7 @@
       $time: function(date, fmt) {
         return defaults.ru.$date(date, fmt || 'Hmm');
       },
-      $num: T.num(' ', ','), // '&thinsp;' or '&#8239;'
+      $num: T.num('&#8239;'/*' '*/, ','), // '&thinsp;' or '&#8239;'
     },
     en: {
       $t: {
@@ -499,6 +500,7 @@
         var keys = parseDateFormat(fmt || 'MMMMDYYYY'), res = '', last, v, p;
         for (var i = 0; i < keys.length; i++) {
           res += !last ? '' :
+            (keys[i][0] == 'd') ? ', ' :
             ((keys[i][0] == 'Y' && last[0] == 'D' && (keys.M == 'M' || keys.M == 'MM')) ||
               keys[i] == 'M' || keys[i] == 'MM' || last == 'M' || last == 'MM') ? '/' :
             (last == 'H' || last == 'HH' || last == 'm' || last == 'mm') ? ':' : ' ';
@@ -519,7 +521,7 @@
       $time: function(date, fmt) {
         return defaults.en.$date(date, fmt || 'Hmm');
       },
-      $num: T.num(',', '.'), // '&thinsp;'
+      $num: T.num(',', '.'),
     }
   };
   for (var p in plurals) {
