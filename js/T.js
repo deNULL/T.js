@@ -294,7 +294,7 @@
       if (pad) {
         ip = new Array(parseInt(pad, 10) + 1 - ip.length).join('0') + ip;
       }
-      prec = prec || '10';
+      prec = (prec === undefined) ? '10' : prec;
       fp = fp.toFixed(parseInt(prec, 10));
       if (prec[0] != '0') {
         for (var i = fp.length - 1; i >= 2; i--) {
@@ -380,7 +380,7 @@
       return PLURAL_CATEGORY.OTHER;
     },
     ru: {
-      $T: {
+      $t: {
         ok:           'OK',
         cancel:       'отмена',
         popup: {
@@ -463,10 +463,10 @@
       $time: function(date, fmt) {
         return defaults.ru.$date(date, fmt || 'Hmm');
       },
-      $num: T.num(' ', ','), // '&thinsp;'
+      $num: T.num(' ', ','), // '&thinsp;' or '&#8239;'
     },
     en: {
-      $T: {
+      $t: {
         ok:           'OK',
         cancel:       'cancel',
         popup_key:    'translating key <b>{}</b>',
@@ -645,8 +645,8 @@
       '<div class="tjs-box"><div class="tjs-box-head">' + title + '</div>' +
         '<div class="tjs-box-body">' + html + '</div>' +
         '<div class="tjs-box-footer">' +
-          '<div class="tjs-button" onclick="T.closePopup(' + popups.length + ', false);">' + T('$T.Cancel!') + '</div>' +
-          '<div class="tjs-button" onclick="T.closePopup(' + popups.length + ', true);">' + T('$T.ok!') + '</div>' +
+          '<div class="tjs-button" onclick="T.closePopup(' + popups.length + ', false);">' + T('$t.Cancel!') + '</div>' +
+          '<div class="tjs-button" onclick="T.closePopup(' + popups.length + ', true);">' + T('$t.Ok!') + '</div>' +
           '<div style="clear: both"></div>' +
         '</div>' +
       '</div>';
@@ -692,7 +692,7 @@
         if (desc.length) {
           desc[0] = desc[0][0].toLocaleUpperCase() + desc[0].substr(1);
         }
-        html.push('<p>' + (desc.length ? desc.join(', ') : T('$T.popup.Value!')) + ':</p>');
+        html.push('<p>' + (desc.length ? desc.join(', ') : T('$t.popup.Value!')) + ':</p>');
         html.push('<div class="tjs-editor" id="tjs-editor-' + id + '-' + subkeys.length + '" contentEditable="true"></div>');
         subkeys.push({
           path: path,
@@ -716,12 +716,12 @@
         parse = true;
       }
       for (var k in keys) {
-        var nm = (['nom', 'gen', 'dat', 'acc', 'ins', 'abl'].indexOf(k) > -1 || parse) ? T('$T.popup.' + k + '!') : ('<b>' + k + '</b>');
+        var nm = (['nom', 'gen', 'dat', 'acc', 'ins', 'abl'].indexOf(k) > -1 || parse) ? T('$t.popup.' + k + '!') : ('<b>' + k + '</b>');
         buildList(keys[k], path + '.' + k, desc.concat(nm));
       }
     }
     buildList(cur, key, []);
-    showPopup(T('$T.popup.Key!', key.toLowerCase()), html.join(''), function() {
+    showPopup(T('$t.popup.Key!', key.toLowerCase()), html.join(''), function() {
       var update = {};
       update[l] = {};
 
@@ -807,7 +807,7 @@
       html.push('</ul>');
       return html.join('');
     }
-    showPopup(T('$T.popup.All!'), buildList(cur, section || ''), function() {
+    showPopup(T('$t.popup.All!'), buildList(cur, section || ''), function() {
       var update = {};
       update[l] = {};
       var path = key.split('.');
