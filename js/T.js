@@ -101,7 +101,7 @@
           }
         }
         if (fmt == 'other' || !val.$date[fmt]) { // More than 3h 30m - show absolute time
-          if (dt.getFullYear() == now.getFullYear()) {
+          if (dt.getFullYear() == now.getFullYear() && val.$date['year']) {
             fmt = 'year';
           }
           for (var i = 0; i < DATE_INTERVALS.length; i += 2) {
