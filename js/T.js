@@ -12,11 +12,6 @@
   var PLURAL_CATEGORY = { ZERO: 'zero', ONE: 'one', TWO: 'two', FEW: 'few', MANY: 'many', OTHER: 'other' };
   var GENDER = { MALE: 'm', FEMALE: 'f' };
   /* Translate */
-  var TIME_INTERVALS =
-    [-3600001, -3600000, 'in_hours', -60001, -60000, 'in_minutes', -4001, -1000, 'in_seconds', 0, 1, 'in_moment',
-      4000, 1, 'moment_ago', 60000, 1000, 'seconds_ago', 3600000, 60000, 'minutes_ago', Infinity, 3600000, 'hours_ago'];
-  var DATE_INTERVALS =
-    [-86400000, 'tomorrow', 0, 'today', 86400000, 'yesterday'];
   var T = function(key, sub, noinline) {
     if (key[key.length - 1] == '!') {
       noinline = true;
@@ -209,78 +204,13 @@
     return wrap(val, path, inline && !noinline);
   };
 
-  /* Utils for plurals */
-  function getDecimals(n) {
-    n = n + '';
-    var i = n.indexOf('.');
-    return (i == -1) ? 0 : n.length - i - 1;
-  }
+  /* Typographics */
+  T.NBSP = '&nbsp;';
+  T.THIN_SP = '&thinsp;';
+  T.THIN_NBSP = '&#8239;'; // or ' ', or '&thinsp;'
 
-  function getVF(n, opt_precision) {
-    var v = opt_precision;
-
-    if (undefined === v) {
-      v = Math.min(getDecimals(n), 3);
-    }
-
-    var base = Math.pow(10, v);
-    var f = ((n * base) | 0) % base;
-    return {v: v, f: f};
-  }
-
-  function inflect(rules, name, cs) {
-    var g = GENDER.MALE;
-    if (name.constructor != ''.constructor) {
-      g = name.g || name[1] || GENDER.MALE;
-      g = (g == 1 || (g+'')[0] == 'f') ? GENDER.FEMALE : GENDER.MALE;
-      name = name.name || name[0];
-    }
-    name = name.split('-');
-    var csind = ({ gen: 0, dat: 1, acc: 2, ins: 3, abl: 4 })[cs];
-    if (csind === undefined) {
-      return name.join('-');
-    }
-    for (var i = 0; i < name.length; i++) {
-      var low = name[i].toLocaleLowerCase();
-      for (var j = 0; j < rules.length; j++) {
-        var rule = rules[j].split(':');
-        var rg = rule[0][rule[0].length - 1];
-        if (rg != 'a' && rg != g) continue;
-        var vars = rule[1].split(',');
-        if (rule[0][0] == '^' && (i || name.length == 1 || vars.indexOf(low) == -1)) continue;
-        if (rule[0][0] == '=' && vars.indexOf(low) == -1) continue;
-        var found = false;
-        for (var k = 0; k < vars.length; k++) {
-          if (low.substr(low.length - vars[k].length) == vars[k]) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) continue;
-        if (rule.length < 3) break;
-        var form = rule[2].split(',')[csind].split('-');
-        name[i] = name[i].substr(0, name[i].length - form.length + 1) + form[form.length - 1];
-        break;
-      }
-    }
-    return name.join('-');
-  };
-  /* Default funcs */
-  function parseDateFormat(fmt) {
-    var used = {};
-    var ord = [];
-    for (var i = 0; i < fmt.length; i++) {
-      var k = (fmt[i] == 'o' && i > 0) ? fmt[i - 1] : fmt[i];
-      if (!used[k]) ord.push(fmt[i]);
-      used[k] = ord[k] = (used[k] || '') + fmt[i];
-    }
-    for (var i = 0; i < ord.length; i++) {
-      ord[i] = used[ord[i]];
-    }
-    return ord;
-  }
-
-  T.num = function(th, dec) {
+  /* Utils for numbers */
+  T.num = function(th, dec) { // Number formatter factory
     return function(n, fmt, prec) {
       fmt = fmt || '';
       var s = (n < 0) ? '−' : fmt.indexOf('+') > -1 ? '+' : '';
@@ -319,6 +249,25 @@
       return s + ip + (fp.length ? dec + fp : '');
     };
   }
+
+  /* Utils for plurals */
+  function getDecimals(n) {
+    n = n + '';
+    var i = n.indexOf('.');
+    return (i == -1) ? 0 : n.length - i - 1;
+  }
+
+  function getVF(n, opt_precision) {
+    var v = opt_precision;
+
+    if (undefined === v) {
+      v = Math.min(getDecimals(n), 3);
+    }
+
+    var base = Math.pow(10, v);
+    var f = ((n * base) | 0) % base;
+    return {v: v, f: f};
+  }
   var plurals = {
     'ru,uk,be': function(n, opt_precision) {
       var i = n | 0;
@@ -337,6 +286,7 @@
       return PLURAL_CATEGORY.OTHER;
     }
   };
+
   /* Utils for inflection of Russian names */
   var infRules = {
     name: [
@@ -374,32 +324,79 @@
       'm:ич:а,у,а,ем,е', 'f:на:-ы,-е,-у,-ой,-е'
     ],
   };
+  function inflect(rules, name, cs) {
+    var g = GENDER.MALE;
+    if (name.constructor != ''.constructor) {
+      g = name.g || name[1] || GENDER.MALE;
+      g = (g == 1 || (g+'')[0] == 'f') ? GENDER.FEMALE : GENDER.MALE;
+      name = name.name || name[0];
+    }
+    name = name.split('-');
+    var csind = ({ gen: 0, dat: 1, acc: 2, ins: 3, abl: 4 })[cs];
+    if (csind === undefined) {
+      return name.join('-');
+    }
+    for (var i = 0; i < name.length; i++) {
+      var low = name[i].toLocaleLowerCase();
+      for (var j = 0; j < rules.length; j++) {
+        var rule = rules[j].split(':');
+        var rg = rule[0][rule[0].length - 1];
+        if (rg != 'a' && rg != g) continue;
+        var vars = rule[1].split(',');
+        if (rule[0][0] == '^' && (i || name.length == 1 || vars.indexOf(low) == -1)) continue;
+        if (rule[0][0] == '=' && vars.indexOf(low) == -1) continue;
+        var found = false;
+        for (var k = 0; k < vars.length; k++) {
+          if (low.substr(low.length - vars[k].length) == vars[k]) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) continue;
+        if (rule.length < 3) break;
+        var form = rule[2].split(',')[csind].split('-');
+        name[i] = name[i].substr(0, name[i].length - form.length + 1) + form[form.length - 1];
+        break;
+      }
+    }
+    return name.join('-');
+  };
+
+  /* Utils for dates */
+  var TIME_INTERVALS =
+    [-3600001, -3600000, 'in_hours', -60001, -60000, 'in_minutes', -4001, -1000, 'in_seconds', 0, 1, 'in_moment',
+      4000, 1, 'moment_ago', 60000, 1000, 'seconds_ago', 3600000, 60000, 'minutes_ago', Infinity, 3600000, 'hours_ago'];
+  var DATE_INTERVALS =
+    [-86400000, 'tomorrow', 0, 'today', 86400000, 'yesterday'];
   var DATE_GETTERS = { Y: 'FullYear', M: 'Month', D: 'Date', d: 'Day', H: 'Hours', m: 'Minutes', s: 'Seconds' };
+  function parseDateFormat(fmt) {
+    var used = {};
+    var ord = [];
+    for (var i = 0; i < fmt.length; i++) {
+      var k = (fmt[i] == 'o' && i > 0) ? fmt[i - 1] : fmt[i];
+      if (!used[k]) ord.push(fmt[i]);
+      used[k] = ord[k] = (used[k] || '') + fmt[i];
+    }
+    for (var i = 0; i < ord.length; i++) {
+      ord[i] = used[ord[i]];
+    }
+    return ord;
+  }
+
+  /* Default values */
   var defaults = {
     plural: function() {
       return PLURAL_CATEGORY.OTHER;
     },
     ru: {
-      $t: {
-        ok:           'OK',
-        cancel:       'отмена',
-        popup: {
-          key:    'перевод ключа <b>{}</b>',
-          all:    'список ключей',
-          value:  'значение',
-          one:    '1, 21, 101…',
-          few:    '2, 22, 102…',
-          many:   '5, 11, 105…',
-          other:  'остальные случаи',
-          m:      'мужской род',
-          f:      'женский род',
-          nom:    'именительный падеж (кто? что?)',
-          gen:    'родительный падеж (кого? чего?)',
-          dat:    'дательный падеж (кому? чему?)',
-          acc:    'винительный падеж (кого? что?)',
-          ins:    'творительный падеж (кем? чем?)',
-          abl:    'предложный падеж (о ком? о чём?)',
-        },
+      $name: function(name, cs) {
+        return inflect(infRules.name, name, cs);
+      },
+      $surname: function(name, cs) {
+        return inflect(infRules.surname, name, cs);
+      },
+      $patronym: function(name, cs) {
+        return inflect(infRules.patronym, name, cs);
       },
       $rdate: { $date: {
         in_hours:     { $plural: { 1: 'через час', 2: 'через два часа', 3: 'через три часа' } },
@@ -416,15 +413,6 @@
         year:         '{$date.DMMM} в {$time.Hmm}',
         other:        '{$date.DMMMYYYY}',
       } },
-      $name: function(name, cs) {
-        return inflect(infRules.name, name, cs);
-      },
-      $surname: function(name, cs) {
-        return inflect(infRules.surname, name, cs);
-      },
-      $patronym: function(name, cs) {
-        return inflect(infRules.patronym, name, cs);
-      },
       $dparts: {
         MMM: {
           nom: 'янв_фев_мар_апр_май_июн_июл_авг_сен_окт_ноя_дек'.split('_'),
@@ -441,14 +429,15 @@
       $date: function(date, fmt) {
         date = date.getTime ? date : new Date(date[0] || date);
         var keys = parseDateFormat(fmt || 'DMMMMYYYY'), res = '', last, v, p;
+        var dparts = (langs[lang] && langs[lang].$dparts) || defaults[lang].$dparts;
         for (var i = 0; i < keys.length; i++) {
           res += !last ? '' :
             (keys[i][0] == 'd') ? ', ' :
             ((keys[i][0] == 'Y' && last[0] == 'D') || keys[i] == 'M' || keys[i] == 'MM' || last == 'M' || last == 'MM') ? '.' :
             (last == 'H' || last == 'HH' || last == 'm' || last == 'mm') ? ':' : ' ';
           v = date['get' + DATE_GETTERS[keys[i][0]]]();
-          if (keys[i] in defaults.ru.$dparts) {
-            p = defaults.ru.$dparts[keys[i]];
+          if (keys[i] in dparts) {
+            p = dparts[keys[i]];
             res += ((keys[i] == 'MMM' || keys[i] == 'MMMM') ? p[keys.D ? 'gen' : 'nom'] : p)[v];
           } else
           if (keys[i].length == 1 || keys[i] == 'YYYY') {
@@ -462,17 +451,11 @@
         return res;
       },
       $time: function(date, fmt) {
-        return defaults.ru.$date(date, fmt || 'Hmm');
+        return ((langs[lang] && langs[lang].$date) || defaults.ru.$date)(date, fmt || 'Hmm');
       },
-      $num: T.num('&#8239;'/*' '*/, ','), // '&thinsp;' or '&#8239;'
+      $num: T.num(T.THIN_NBSP, ','),
     },
     en: {
-      $t: {
-        ok:           'OK',
-        cancel:       'cancel',
-        popup_key:    'translating key <b>{}</b>',
-        popup_all:    'list of keys',
-      },
       $rdate: { $date: {
         in_hours:     { $plural: { 1: 'in an hour', 2: 'in two hours', 3: 'in three hours' } },
         in_minutes:   { $plural: { 1: 'in a minute', 2: 'in two minutes', 3: 'in three minutes', one: 'in {} minute', other: 'in {} minutes' } },
@@ -498,6 +481,7 @@
       $date: function(date, fmt) {
         date = date.getTime ? date : new Date(date[0] || date);
         var keys = parseDateFormat(fmt || 'MMMMDYYYY'), res = '', last, v, p;
+        var dparts = (langs[lang] && langs[lang].$dparts) || defaults[lang].$dparts;
         for (var i = 0; i < keys.length; i++) {
           res += !last ? '' :
             (keys[i][0] == 'd') ? ', ' :
@@ -505,8 +489,8 @@
               keys[i] == 'M' || keys[i] == 'MM' || last == 'M' || last == 'MM') ? '/' :
             (last == 'H' || last == 'HH' || last == 'm' || last == 'mm') ? ':' : ' ';
           v = date['get' + DATE_GETTERS[keys[i][0]]]();
-          if (keys[i] in defaults.en.$dparts) {
-            res += defaults.en.$dparts[keys[i]][v];
+          if (keys[i] in dparts) {
+            res += dparts[keys[i]][v];
           } else
           if (keys[i].length == 1 || keys[i] == 'YYYY') {
             res += v;
@@ -519,12 +503,13 @@
         return res;
       },
       $time: function(date, fmt) {
-        return defaults.en.$date(date, fmt || 'Hmm');
+        return ((langs[lang] && langs[lang].$date) || defaults.ru.$date)(date, fmt || 'Hmm');
       },
       $num: T.num(',', '.'),
     }
   };
-  for (var p in plurals) {
+
+  for (var p in plurals) { // Add plurals to defaults
     var l = p.split(',');
     for (var i = 0; i < l.length; i++) {
       if (!defaults[l[i]]) {
@@ -532,7 +517,7 @@
       }
       defaults[l[i]].plural = plurals[p];
     }
-  }
+  };
 
   /* Utils */
   var walk = function(path, obj) {
@@ -576,6 +561,37 @@
     } else {
       lang = _lang;
     }
+  };
+
+  /* Below is translators-only stuff */
+  /* TODO: move it to separate js file */
+
+  defaults.ru.$t = {
+    ok:           'OK',
+    cancel:       'отмена',
+    popup: {
+      key:    'перевод ключа <b>{}</b>',
+      all:    'список ключей',
+      value:  'значение',
+      one:    '1, 21, 101…',
+      few:    '2, 22, 102…',
+      many:   '5, 11, 105…',
+      other:  'остальные случаи',
+      m:      'мужской род',
+      f:      'женский род',
+      nom:    'именительный падеж (кто? что?)',
+      gen:    'родительный падеж (кого? чего?)',
+      dat:    'дательный падеж (кому? чему?)',
+      acc:    'винительный падеж (кого? что?)',
+      ins:    'творительный падеж (кем? чем?)',
+      abl:    'предложный падеж (о ком? о чём?)',
+    }
+  };
+  defaults.en.$t = {
+    ok:           'OK',
+    cancel:       'cancel',
+    popup_key:    'translating key <b>{}</b>',
+    popup_all:    'list of keys',
   };
 
   T.addUpdateListener = function(listener) {
