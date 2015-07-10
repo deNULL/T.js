@@ -1,5 +1,5 @@
 {
-  "name": "T.js",
+  "name": "t-js",
   "version": "0.5.0",
   "description": "I18n, l10n and string interpolation JavaScript library",
   "main": "js/T.js",
