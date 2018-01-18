@@ -852,7 +852,10 @@
   };
 
   if (typeof exports !== 'undefined') {
-    exports = T;
+    exports['default'] = T;
+    if (typeof module !== 'undefined') {
+      module.exports = exports["default"];
+    }
   } else {
     var root = (typeof self == 'object' && self.self == self && self) ||
                (typeof global == 'object' && global.global == global && global);
